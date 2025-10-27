@@ -233,7 +233,7 @@ class DeepReviewer:
                     # --- First LLM Call (Best Mode) ---
                     messages_step1 = [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": single_paper_context}
+                        {"role": "user", "content": single_paper_context} # 
                     ]
                     input_text_step1 = self.tokenizer.apply_chat_template(
                         messages_step1, tokenize=False, add_generation_prompt=True

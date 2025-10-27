@@ -4,14 +4,24 @@ Benchmark script for DeepReviewer using WestlakeNLP/DeepReview-13K dataset
 
 import json
 import os
+import random
 from datasets import load_dataset
 from ai_researcher import DeepReviewer
-
+import time
+from datetime import datetime
 # Set CUDA device if needed
-os.environ["CUDA_VISIBLE_DEVICES"] = "6,7" 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "6,7"
+
+# Configuration
+RANDOM_SEED = 42
+NUM_SAMPLES = 100
+
+# Set random seed for reproducibility
+random.seed(RANDOM_SEED)
 
 
 def main():
+
     # 1. Load WestlakeNLP/DeepReview-13K dataset (test split only)
     print("Loading DeepReview-13K dataset (test split)...")
     ds = load_dataset("WestlakeNLP/DeepReview-13K", split="test")
@@ -48,20 +58,34 @@ def main():
     # 3. Append all paper_text to a list
     print("Collecting all paper texts...")
     paper_texts = list(ds['paper_text'])
-    # paper_texts = paper_texts[:20]
 
+    # Randomly sample papers with seed for reproducibility
+    if len(paper_texts) > NUM_SAMPLES:
+        # Get random indices
+        sampled_indices = random.sample(range(len(paper_texts)), NUM_SAMPLES)
+        sampled_indices.sort()  # Sort to maintain some order
+        paper_texts = [paper_texts[i] for i in sampled_indices]
+        # Also need to filter the dataset to match
+        ds = ds.select(sampled_indices)
+
+    print(f"Sampled {len(paper_texts)} papers (seed: {RANDOM_SEED})")
 
     # 4. Initialize DeepReviewer and run evaluations
     print("\nInitializing DeepReviewer...")
-    deep_reviewer = DeepReviewer(model_size="14B", tensor_parallel_size=2)
+    deep_reviewer = DeepReviewer(model_size="7B", tensor_parallel_size=2)
 
+    # Start timing
+    start_time = time.time()
     print("\nRunning Fast Mode evaluation...")
     fast_review_results = deep_reviewer.evaluate(
         paper_texts,
         mode="Fast Mode",  # Options: "Fast Mode", "Standard Mode", "Best Mode"
         reviewer_num=4         # Simulate 4 different reviewers
     )
-
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"\nFast Mode evaluation completed in {elapsed_time:.2f} seconds")
+    
     # print("\nRunning Standard Mode evaluation...")
     # standard_review_results = deep_reviewer.evaluate(
     #     paper_texts,
@@ -77,20 +101,22 @@ def main():
     print("\nPreparing output data...")
     output_data = []
 
-    for i, example in enumerate(ds):
+    
+    for i in range(len(paper_texts)):
         entry = {
-            'id': example.get('id', i),
-            'title': example.get('title', ''),
-            'paper_context': example.get('paper_text', ''),
-            'decision': example.get('decision', ''),
-            'review': example.get('review_comments', ''),
+            'id': ds[i].get('id', i),
+            'title': ds[i].get('title', ''),
+            'paper_context': ds[i].get('paper_text', ''),
+            'decision': ds[i].get('decision', ''),
+            'review': ds[i].get('reviewer_comments', ''),
             'pred_fast_mode': fast_review_results[i],
             'pred_standard_mode': '',  # standard_review_results[i],
         }
         output_data.append(entry)
 
     # 6. Save to JSON file
-    output_file = 'benchmark_deepreviewer_results.json'
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    output_file = f'evaluate/review/benchmark_deepreviewer_results_{timestamp}.json'
     print(f"\nSaving results to {output_file}...")
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)

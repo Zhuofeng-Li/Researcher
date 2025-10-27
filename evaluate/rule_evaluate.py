@@ -1,4 +1,8 @@
 import json
+import argparse
+import csv
+import os
+from datetime import datetime
 from itertools import combinations
 
 import torch
@@ -20,7 +24,7 @@ def get_pred(pred_context):
         # Extract the review content from the boxed format
         pred_context = pred_context.split(r'\boxed_review{')[-1].split('\n}')[0]
     except:
-        pred_context = pred_context['output'].split(r'\boxed_review{')[-1].split('\n}')[0]
+        pred_context = pred_context['raw_text'].split(r'\boxed_review{')[-1].split('\n}')[0]
 
     # Initialize a dictionary with all review components
     pred = {
@@ -105,12 +109,24 @@ def evaluate_deep_reviewer(data_path, mode='standard'):
                     continue
 
                 # Extract human review scores for this paper
-                rates = torch.tensor([int(r['content']['rating'][0]) for r in item['review']], dtype=torch.float32)
-                soundness = torch.tensor([int(r['content']['soundness'][0]) for r in item['review']],
+                # Helper function to safely extract score
+                def extract_score(value):
+                    """Extract score from various formats (int, str, list)"""
+                    if isinstance(value, (int, float)):
+                        return int(value)
+                    elif isinstance(value, str):
+                        return int(value[0]) if value else 0
+                    elif isinstance(value, (list, tuple)):
+                        return int(value[0]) if value else 0
+                    else:
+                        return 0
+
+                rates = torch.tensor([extract_score(r['content']['rating']) for r in item['review']], dtype=torch.float32)
+                soundness = torch.tensor([extract_score(r['content']['soundness']) for r in item['review']],
                                          dtype=torch.float32)
-                presentation = torch.tensor([int(r['content']['presentation'][0]) for r in item['review']],
+                presentation = torch.tensor([extract_score(r['content']['presentation']) for r in item['review']],
                                             dtype=torch.float32)
-                contribution = torch.tensor([int(r['content']['contribution'][0]) for r in item['review']],
+                contribution = torch.tensor([extract_score(r['content']['contribution']) for r in item['review']],
                                             dtype=torch.float32)
 
                 # Extract model predictions (handling possible newlines in output)
@@ -220,7 +236,7 @@ def evaluate_deep_reviewer(data_path, mode='standard'):
 
     # Calculate decision metrics
     decision_acc_val = torch.mean(torch.tensor(decision_acc)).item()
-    precision, recall, f1_val, _ = precision_recall_fscore_support(true_decisions, pred_decisions, average='macro')
+    _, _, f1_val, _ = precision_recall_fscore_support(true_decisions, pred_decisions, average='macro')
     f1_score = float(f1_val)
 
     # Prepare results dictionary
@@ -331,14 +347,67 @@ def main():
     """
     Main function to run the evaluation.
     """
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Evaluate DeepReviewer predictions')
+    parser.add_argument('data_path', type=str, help='Path to the JSON file containing predictions')
+    parser.add_argument('--modes', nargs='+', default=['fast'],
+                        choices=['fast', 'standard', 'best'],
+                        help='Evaluation modes to run (default: all modes)')
 
-    # Evaluate both modes and display results
-    for mode in ['fast', 'standard','best']:
-        results = evaluate_deep_reviewer('evaluate/DeepReview/sample.json', mode)
+    args = parser.parse_args()
+
+    # Create output directory if it doesn't exist
+    output_dir = 'evaluate/result'
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Collect all results for CSV export
+    all_results = []
+
+    # Evaluate specified modes and display results
+    for mode in args.modes:
+        results = evaluate_deep_reviewer(args.data_path, mode)
         print(f"\nResults for DeepReviewer in {mode} mode:")
         markdown_table = create_markdown_table(results)
+
         print(markdown_table)
+
+        # Store results for CSV
+        all_results.append(results)
+
+    # Save results to CSV with selected metrics only
+    # Generate filename with current timestamp
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    csv_filename = os.path.join(output_dir, f'rule_results_{timestamp}.csv')
+
+    # Define which metrics to include in CSV
+    selected_metrics = [
+        'Model/Method',
+        'Rating MSE',
+        'Soundness MSE',
+        'Presentation MSE',
+        'Contribution MSE',
+        'Decision F1',
+        'Pairwise Rating Acc'
+    ]
+
+    with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+        if all_results:
+            writer = csv.DictWriter(csvfile, fieldnames=selected_metrics)
+            writer.writeheader()
+
+            for result in all_results:
+                # Filter to only include selected metrics
+                filtered_result = {k: result[k] for k in selected_metrics if k in result}
+                writer.writerow(filtered_result)
+
+    print(f"Results saved to {csv_filename}")
 
 
 if __name__ == "__main__":
     main()
+
+"""
+python evaluate/rule_evaluate.py evaluate/review/benchmark_deepreviewer_results.json --modes fast
+"""
+
+# 

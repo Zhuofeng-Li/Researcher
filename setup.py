@@ -12,6 +12,9 @@ setup(
         'transformers>=4.48.2',
         'vllm>=0.7.2',
         'bibtexparser',
+        'datasets',
+        'matplotlib',
+        'scikit-learn ',
     ],
     classifiers=[
         'Programming Language :: Python :: 3.8',

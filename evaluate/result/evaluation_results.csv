@@ -1,0 +1,2 @@
+Model/Method,Rating MSE,Rating MAE,Soundness MSE,Soundness MAE,Presentation MSE,Presentation MAE,Contribution MSE,Contribution MAE,Rating Spearman,Soundness Spearman,Presentation Spearman,Contribution Spearman,Decision Accuracy,Decision F1,Pairwise Rating Acc,Pairwise Soundness Acc,Pairwise Presentation Acc,Pairwise Contribution Acc
+DeepReviewer fast (n=1286),1.4235,0.9405,0.1728,0.3215,0.2102,0.3574,0.1970,0.3490,0.3495,0.3164,0.2740,0.2666,0.6445,0.6253,0.6170,0.6057,0.5901,0.5911

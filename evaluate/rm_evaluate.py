@@ -2,31 +2,16 @@
 import json
 import os
 import random
+import csv
 
 import openai
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from tqdm import tqdm
+import argparse
+from datetime import datetime
+from dotenv import load_dotenv
 
-
-# Configuration
-class Config:
-    """Configuration settings for the review comparison system."""
-    # Proxy settings
-    PROXY = ""
-
-    # API settings
-    GEMINI_API_KEY = "your-api-key-here"
-    GEMINI_API_URL = "https://api.openai.com/v1"
-
-    # Model settings
-    MODEL_NAME = "gpt-4o-mini"
-
-    # Paths
-    OUTPUT_PATH = "DeepReviewer_win_rate.json"
-    SAMPLE_PATH = "evaluate/DeepReview/sample.json"
-    YEAR = 2024
-
-
+# Load environment variables from .env file
+load_dotenv()
 
 # System prompt for the evaluator
 SYSTEM_PROMPT = """
@@ -191,7 +176,7 @@ class DataManager:
             return json.load(f)
 
     @staticmethod
-    def prepare_comparison_data(dataA, dataB):
+    def prepare_comparison_data(dataA, dataB, args):
         """
         Prepare data for comparison between standard and fast mode reviews.
 
@@ -218,7 +203,7 @@ class DataManager:
         for paper_id in common_ids:
             comparison_data.append({
                 'id': paper_id,
-                'year': Config.YEAR,
+                'year': args.year,
                 'paper_context': paper_contexts[paper_id],
                 'DeepReviewer': best_reviews[paper_id],
                 'other': standard_reviews[paper_id],
@@ -231,17 +216,18 @@ class DataManager:
 class EvaluationManager:
     """Manages the evaluation process using LLM API."""
 
-    def __init__(self):
+    def __init__(self, args):
         """Initialize the evaluation manager."""
         # Set proxy settings
-        os.environ['http_proxy'] = Config.PROXY
-        os.environ['https_proxy'] = Config.PROXY
+        os.environ['http_proxy'] = args.proxy
+        os.environ['https_proxy'] = args.proxy
 
         # Initialize OpenAI client
         self.client = openai.Client(
-            base_url=Config.GEMINI_API_URL,
-            api_key=Config.GEMINI_API_KEY
+            base_url=args.api_url,
+            api_key=args.api_key
         )
+        self.args = args
 
     def prepare_prompt(self, paper_item):
         """
@@ -289,20 +275,9 @@ class EvaluationManager:
         content, ordering = self.prepare_prompt(paper_item)
         paper_item['v.s.'] = ordering
 
-		# TOOD: delete
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B")
-        msg = tokenizer.apply_chat_template(
-            [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {'role': 'user', 'content': content},
-            ],
-            return_tensors="pt"
-        )
-        print("Token Length:",msg[0].shape[0])
-        exit()
         # Call the API
         response = self.client.chat.completions.create(
-            model=Config.MODEL_NAME,
+            model=self.args.model_name,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {'role': 'user', 'content': content},
@@ -397,57 +372,139 @@ def print_result(data):
                         results_Technical_Accuracy.append('lose')
 
     print('Total Number', len(result_Overall_Judgment))
-    print('Overall Judgment Win', result_Overall_Judgment.count('win') / len(result_Overall_Judgment))
-    print('Overall Judgment Tie', result_Overall_Judgment.count('tie') / len(result_Overall_Judgment))
-    print('Overall Judgment Lose', result_Overall_Judgment.count('lose') / len(result_Overall_Judgment))
 
-    print('Constructive Value Win', result_Constructive_Value.count('win') / len(result_Constructive_Value))
-    print('Constructive Value Tie', result_Constructive_Value.count('tie') / len(result_Constructive_Value))
-    print('Constructive Value Lose', result_Constructive_Value.count('lose') / len(result_Constructive_Value))
+    # Helper function to safely calculate percentage
+    def safe_percent(count, total_list):
+        return count / len(total_list) if len(total_list) > 0 else 0.0
 
-    print('Analytical Depth Win', result_Analytical_Depth.count('win') / len(result_Analytical_Depth))
-    print('Analytical Depth Tie', result_Analytical_Depth.count('tie') / len(result_Analytical_Depth))
-    print('Analytical Depth Lose', result_Analytical_Depth.count('lose') / len(result_Analytical_Depth))
+    if len(result_Overall_Judgment) > 0:
+        print('Overall Judgment Win', safe_percent(result_Overall_Judgment.count('win'), result_Overall_Judgment))
+        print('Overall Judgment Tie', safe_percent(result_Overall_Judgment.count('tie'), result_Overall_Judgment))
+        print('Overall Judgment Lose', safe_percent(result_Overall_Judgment.count('lose'), result_Overall_Judgment))
 
-    print('Communication Clarity Win',
-          result_Communication_Clarity.count('win') / len(result_Communication_Clarity))
-    print('Communication Clarity Tie',
-          result_Communication_Clarity.count('tie') / len(result_Communication_Clarity))
-    print('Communication Clarity Lose',
-          result_Communication_Clarity.count('lose') / len(result_Communication_Clarity))
+    if len(result_Constructive_Value) > 0:
+        print('Constructive Value Win', safe_percent(result_Constructive_Value.count('win'), result_Constructive_Value))
+        print('Constructive Value Tie', safe_percent(result_Constructive_Value.count('tie'), result_Constructive_Value))
+        print('Constructive Value Lose', safe_percent(result_Constructive_Value.count('lose'), result_Constructive_Value))
 
-    print('Technical Accuracy Win', results_Technical_Accuracy.count('win') / len(results_Technical_Accuracy))
-    print('Technical Accuracy Tie', results_Technical_Accuracy.count('tie') / len(results_Technical_Accuracy))
-    print('Technical Accuracy Lose', results_Technical_Accuracy.count('lose') / len(results_Technical_Accuracy))
+    if len(result_Analytical_Depth) > 0:
+        print('Analytical Depth Win', safe_percent(result_Analytical_Depth.count('win'), result_Analytical_Depth))
+        print('Analytical Depth Tie', safe_percent(result_Analytical_Depth.count('tie'), result_Analytical_Depth))
+        print('Analytical Depth Lose', safe_percent(result_Analytical_Depth.count('lose'), result_Analytical_Depth))
+
+    if len(result_Communication_Clarity) > 0:
+        print('Communication Clarity Win', safe_percent(result_Communication_Clarity.count('win'), result_Communication_Clarity))
+        print('Communication Clarity Tie', safe_percent(result_Communication_Clarity.count('tie'), result_Communication_Clarity))
+        print('Communication Clarity Lose', safe_percent(result_Communication_Clarity.count('lose'), result_Communication_Clarity))
+
+    if len(results_Technical_Accuracy) > 0:
+        print('Technical Accuracy Win', safe_percent(results_Technical_Accuracy.count('win'), results_Technical_Accuracy))
+        print('Technical Accuracy Tie', safe_percent(results_Technical_Accuracy.count('tie'), results_Technical_Accuracy))
+        print('Technical Accuracy Lose', safe_percent(results_Technical_Accuracy.count('lose'), results_Technical_Accuracy))
+
     print()
 
+    # Return results as a dictionary for CSV export
+    results_dict = {
+        'Total Number': len(result_Overall_Judgment),
+        'Overall Judgment Win': safe_percent(result_Overall_Judgment.count('win'), result_Overall_Judgment) if len(result_Overall_Judgment) > 0 else 0.0,
+        'Overall Judgment Tie': safe_percent(result_Overall_Judgment.count('tie'), result_Overall_Judgment) if len(result_Overall_Judgment) > 0 else 0.0,
+        'Overall Judgment Lose': safe_percent(result_Overall_Judgment.count('lose'), result_Overall_Judgment) if len(result_Overall_Judgment) > 0 else 0.0,
+        'Constructive Value Win': safe_percent(result_Constructive_Value.count('win'), result_Constructive_Value) if len(result_Constructive_Value) > 0 else 0.0,
+        'Constructive Value Tie': safe_percent(result_Constructive_Value.count('tie'), result_Constructive_Value) if len(result_Constructive_Value) > 0 else 0.0,
+        'Constructive Value Lose': safe_percent(result_Constructive_Value.count('lose'), result_Constructive_Value) if len(result_Constructive_Value) > 0 else 0.0,
+        'Analytical Depth Win': safe_percent(result_Analytical_Depth.count('win'), result_Analytical_Depth) if len(result_Analytical_Depth) > 0 else 0.0,
+        'Analytical Depth Tie': safe_percent(result_Analytical_Depth.count('tie'), result_Analytical_Depth) if len(result_Analytical_Depth) > 0 else 0.0,
+        'Analytical Depth Lose': safe_percent(result_Analytical_Depth.count('lose'), result_Analytical_Depth) if len(result_Analytical_Depth) > 0 else 0.0,
+        'Communication Clarity Win': safe_percent(result_Communication_Clarity.count('win'), result_Communication_Clarity) if len(result_Communication_Clarity) > 0 else 0.0,
+        'Communication Clarity Tie': safe_percent(result_Communication_Clarity.count('tie'), result_Communication_Clarity) if len(result_Communication_Clarity) > 0 else 0.0,
+        'Communication Clarity Lose': safe_percent(result_Communication_Clarity.count('lose'), result_Communication_Clarity) if len(result_Communication_Clarity) > 0 else 0.0,
+        'Technical Accuracy Win': safe_percent(results_Technical_Accuracy.count('win'), results_Technical_Accuracy) if len(results_Technical_Accuracy) > 0 else 0.0,
+        'Technical Accuracy Tie': safe_percent(results_Technical_Accuracy.count('tie'), results_Technical_Accuracy) if len(results_Technical_Accuracy) > 0 else 0.0,
+        'Technical Accuracy Lose': safe_percent(results_Technical_Accuracy.count('lose'), results_Technical_Accuracy) if len(results_Technical_Accuracy) > 0 else 0.0,
+    }
+
+    return results_dict
+
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Review Comparison System")
+
+    # Proxy settings
+    parser.add_argument("--proxy", type=str, default="", help="Proxy address")
+
+    # API settings
+    parser.add_argument("--api_key", type=str, default=os.getenv("OPENAI_API_KEY", ""), help="API key for OpenAI (defaults to OPENAI_API_KEY from .env)")
+    parser.add_argument("--api_url", type=str, default="https://api.openai.com/v1", help="OpenAI API base URL")
+
+    # Model settings
+    parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="Model name")
+
+    # Paths
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    parser.add_argument("--output_path", type=str, default=f"evaluate/result/rm_results_{timestamp}.json", help="Output file path")
+    parser.add_argument("--sample_path", type=str, default="evaluate/review/sample.json", help="Sample file path")
+
+    # Year
+    parser.add_argument("--year", type=int, default=2024, help="Paper year")
+
+    return parser.parse_args()
 
 def main():
     """Main execution function."""
+    args = parse_args()
     # Initialize components
     data_manager = DataManager()
-    evaluator = EvaluationManager()
+    evaluator = EvaluationManager(args)
 
     # Load data
-    dataA = data_manager.load_data(Config.SAMPLE_PATH)
-    dataB = data_manager.load_data(Config.SAMPLE_PATH)
+    dataA = data_manager.load_data(args.sample_path)
+    dataB = data_manager.load_data(args.sample_path)
 
     # Prepare comparison data
-    comparison_data = data_manager.prepare_comparison_data(dataA, dataB)
+    comparison_data = data_manager.prepare_comparison_data(dataA, dataB, args)
 
     # Evaluate all paper reviews
     results = []
     for paper_item in tqdm(comparison_data, desc="Evaluating reviews"): # TODO: use multi-thread to speed up
-        record = {}
         # Get evaluation result
         result = evaluator.evaluate_reviews(paper_item)
-        record['v.s.'] = result['v.s.']
-        record['result'] = result['result']
-        results.append(record)
-        # results.append(result)
+        results.append(result)
         # Write result to file
-        ResultWriter.write_result(record, Config.OUTPUT_PATH)
-    print_result(results)
+        ResultWriter.write_result(result, args.output_path)
+
+    # Print and get results
+    results_dict = print_result(results)
+
+    # Save results to CSV
+    output_dir = 'evaluate/result'
+    os.makedirs(output_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    csv_filename = os.path.join(output_dir, f'rm_results_{timestamp}.csv')
+
+    print(f"\nSaving results to {csv_filename}...")
+    with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=results_dict.keys())
+        writer.writeheader()
+        writer.writerow(results_dict)
+
+    print(f"Results saved to {csv_filename}")
 
 if __name__ == "__main__":
     main()
+
+"""
+# Usage examples:
+
+# Using vLLM local server
+python evaluate/rm_evaluate.py --api_url http://localhost:8000/v1 --model_name Qwen/Qwen2.5-7B-Instruct
+
+# Using OpenAI API (API key from .env file)
+python evaluate/rm_evaluate.py --model_name gpt-4o-mini
+
+# Or specify API key directly
+python evaluate/rm_evaluate.py --model_name gpt-4o-mini --api_key your-api-key-here
+"""

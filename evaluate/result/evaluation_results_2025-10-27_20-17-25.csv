@@ -1,0 +1,2 @@
+Model/Method,Rating MSE,Soundness MSE,Presentation MSE,Contribution MSE,Decision F1,Pairwise Rating Acc
+DeepReviewer fast (n=1286),1.4235,0.1728,0.2102,0.1970,0.6253,0.6170
