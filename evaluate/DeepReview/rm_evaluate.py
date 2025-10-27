@@ -4,28 +4,8 @@ import os
 import random
 
 import openai
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from tqdm import tqdm
-
-
-# Configuration
-class Config:
-    """Configuration settings for the review comparison system."""
-    # Proxy settings
-    PROXY = ""
-
-    # API settings
-    GEMINI_API_KEY = "your-api-key-here"
-    GEMINI_API_URL = "https://api.openai.com/v1"
-
-    # Model settings
-    MODEL_NAME = "gpt-4o-mini"
-
-    # Paths
-    OUTPUT_PATH = "DeepReviewer_win_rate.json"
-    SAMPLE_PATH = "evaluate/DeepReview/sample.json"
-    YEAR = 2024
-
+import argparse
 
 
 # System prompt for the evaluator
@@ -191,7 +171,7 @@ class DataManager:
             return json.load(f)
 
     @staticmethod
-    def prepare_comparison_data(dataA, dataB):
+    def prepare_comparison_data(dataA, dataB, args):
         """
         Prepare data for comparison between standard and fast mode reviews.
 
@@ -218,7 +198,7 @@ class DataManager:
         for paper_id in common_ids:
             comparison_data.append({
                 'id': paper_id,
-                'year': Config.YEAR,
+                'year': args.year,
                 'paper_context': paper_contexts[paper_id],
                 'DeepReviewer': best_reviews[paper_id],
                 'other': standard_reviews[paper_id],
@@ -231,17 +211,18 @@ class DataManager:
 class EvaluationManager:
     """Manages the evaluation process using LLM API."""
 
-    def __init__(self):
+    def __init__(self, args):
         """Initialize the evaluation manager."""
         # Set proxy settings
-        os.environ['http_proxy'] = Config.PROXY
-        os.environ['https_proxy'] = Config.PROXY
+        os.environ['http_proxy'] = args.proxy
+        os.environ['https_proxy'] = args.proxy
 
         # Initialize OpenAI client
         self.client = openai.Client(
-            base_url=Config.GEMINI_API_URL,
-            api_key=Config.GEMINI_API_KEY
+            base_url=args.api_url,
+            api_key=args.api_key
         )
+        self.args = args
 
     def prepare_prompt(self, paper_item):
         """
@@ -289,20 +270,9 @@ class EvaluationManager:
         content, ordering = self.prepare_prompt(paper_item)
         paper_item['v.s.'] = ordering
 
-		# TOOD: delete
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B")
-        msg = tokenizer.apply_chat_template(
-            [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {'role': 'user', 'content': content},
-            ],
-            return_tensors="pt"
-        )
-        print("Token Length:",msg[0].shape[0])
-        exit()
         # Call the API
         response = self.client.chat.completions.create(
-            model=Config.MODEL_NAME,
+            model=self.args.model_name,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {'role': 'user', 'content': content},
@@ -422,18 +392,43 @@ def print_result(data):
     print()
 
 
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Review Comparison System")
+
+    # Proxy settings
+    parser.add_argument("--proxy", type=str, default="", help="Proxy address")
+
+    # API settings
+    parser.add_argument("--api_key", type=str, default="your-api-key-here", help="API key for OpenAI")
+    parser.add_argument("--api_url", type=str, default="https://api.openai.com/v1", help="OpenAI API base URL")
+
+    # Model settings
+    parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="Model name")
+
+    # Paths
+    parser.add_argument("--output_path", type=str, default="DeepReviewer_win_rate.json", help="Output file path")
+    parser.add_argument("--sample_path", type=str, default="evaluate/DeepReview/sample.json", help="Sample file path")
+
+    # Year
+    parser.add_argument("--year", type=int, default=2024, help="Paper year")
+
+    return parser.parse_args()
+
 def main():
     """Main execution function."""
+    args = parse_args()
     # Initialize components
     data_manager = DataManager()
-    evaluator = EvaluationManager()
+    evaluator = EvaluationManager(args)
 
     # Load data
-    dataA = data_manager.load_data(Config.SAMPLE_PATH)
-    dataB = data_manager.load_data(Config.SAMPLE_PATH)
+    dataA = data_manager.load_data(args.sample_path)
+    dataB = data_manager.load_data(args.sample_path)
 
     # Prepare comparison data
-    comparison_data = data_manager.prepare_comparison_data(dataA, dataB)
+    comparison_data = data_manager.prepare_comparison_data(dataA, dataB, args)
 
     # Evaluate all paper reviews
     results = []
@@ -441,13 +436,22 @@ def main():
         record = {}
         # Get evaluation result
         result = evaluator.evaluate_reviews(paper_item)
-        record['v.s.'] = result['v.s.']
-        record['result'] = result['result']
-        results.append(record)
+        # record['v.s.'] = result['v.s.']
+        # record['result'] = result['result']
+        # results.append(record)
         # results.append(result)
         # Write result to file
-        ResultWriter.write_result(record, Config.OUTPUT_PATH)
+        ResultWriter.write_result(result, args.output_path)
     print_result(results)
 
 if __name__ == "__main__":
     main()
+
+"""
+# vllm 
+python evaluate/DeepReview/rm_evaluate.py --api_url http://localhost:8000/v1 --model Qwen/Qwen2.5-7B-Instruct
+
+python evaluate/DeepReview/rm_evaluate.py --api_url http://localhost:8000/v1 --model Qwen/Qwen3-4B
+
+python evaluate/DeepReview/rm_evaluate.py --model_name gpt-4o
+"""

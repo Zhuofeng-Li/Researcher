@@ -334,7 +334,7 @@ def main():
 
     # Evaluate both modes and display results
     for mode in ['fast', 'standard','best']:
-        results = evaluate_deep_reviewer('sample.json', mode)
+        results = evaluate_deep_reviewer('evaluate/DeepReview/sample.json', mode)
         print(f"\nResults for DeepReviewer in {mode} mode:")
         markdown_table = create_markdown_table(results)
         print(markdown_table)

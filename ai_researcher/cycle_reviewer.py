@@ -25,7 +25,7 @@ class CycleReviewer:
             gpu_memory_utilization (float): Fraction of GPU memory to use
         """
         model_mapping = {
-            "8B": "WestlakeNLP/CycleReviewer-ML-Llama3.1-8B",
+            "8B": "WestlakeNLP/CycleReviewer-ML-Llama-3.1-8B",
             "70B": "WestlakeNLP/CycleReviewer-ML-Llama3.1-70B",
             "123B": "WestlakeNLP/CycleReviewer-ML-Pro-123B"
         }
