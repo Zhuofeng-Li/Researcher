@@ -1,0 +1,2 @@
+Model/Method,Rating MSE,Soundness MSE,Presentation MSE,Contribution MSE,Decision F1,Pairwise Rating Acc
+DeepReviewer base (n=100),4.3677,0.8706,0.4091,1.0553,0.4083,0.5600
