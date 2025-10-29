@@ -111,8 +111,7 @@ class DeepReviewer:
     """
 
     def __init__(self,
-                 model_size="14B",
-                 custom_model_name=None,
+                 model_name="WestlakeNLP/DeepReviewer-14B",
                  device="cuda",
                  tensor_parallel_size=1,
                  gpu_memory_utilization=0.95):
@@ -120,24 +119,11 @@ class DeepReviewer:
         Initialize the DeepReviewer.
 
         Args:
-            model_size (str): Size of the default model to use. Options: "14B", "70B", "123B"
-            custom_model_name (str, optional): Custom model name to override default mapping
+            model_name (str): Model name to use. Default is "WestlakeNLP/DeepReviewer-14B"
             device (str): Device to run the model on. Default is "cuda"
             tensor_parallel_size (int): Number of GPUs to use for tensor parallelism
             gpu_memory_utilization (float): Fraction of GPU memory to use
         """
-        model_mapping = {
-            "14B": "WestlakeNLP/DeepReviewer-14B",
-            "7B": "WestlakeNLP/DeepReviewer-7B",
-        }
-
-        # Determine model name
-        if custom_model_name:
-            model_name = custom_model_name
-        else:
-            if model_size not in model_mapping:
-                raise ValueError(f"Invalid model size. Choose from {list(model_mapping.keys())}")
-            model_name = model_mapping[model_size]
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -146,7 +132,7 @@ class DeepReviewer:
         self.model = LLM(
             model=model_name,
             tensor_parallel_size=tensor_parallel_size,
-            max_model_len=90000,
+            # max_model_len=90000,
             gpu_memory_utilization=gpu_memory_utilization
         )
 

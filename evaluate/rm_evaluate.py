@@ -3,6 +3,7 @@ import json
 import os
 import random
 import csv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import openai
 from tqdm import tqdm
@@ -222,10 +223,15 @@ class EvaluationManager:
         os.environ['http_proxy'] = args.proxy
         os.environ['https_proxy'] = args.proxy
 
+        # Read API key from environment variable
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not found in environment variables. Please set it in .env file or export it.")
+
         # Initialize OpenAI client
         self.client = openai.Client(
             base_url=args.api_url,
-            api_key=args.api_key
+            api_key=api_key
         )
         self.args = args
 
@@ -436,7 +442,6 @@ def parse_args():
     parser.add_argument("--proxy", type=str, default="", help="Proxy address")
 
     # API settings
-    parser.add_argument("--api_key", type=str, default=os.getenv("OPENAI_API_KEY", ""), help="API key for OpenAI (defaults to OPENAI_API_KEY from .env)")
     parser.add_argument("--api_url", type=str, default="https://api.openai.com/v1", help="OpenAI API base URL")
 
     # Model settings
@@ -449,6 +454,9 @@ def parse_args():
 
     # Year
     parser.add_argument("--year", type=int, default=2024, help="Paper year")
+
+    # Multi-threading
+    parser.add_argument("--max_workers", type=int, default=5, help="Maximum number of worker threads (default: 5)")
 
     return parser.parse_args()
 
@@ -466,14 +474,30 @@ def main():
     # Prepare comparison data
     comparison_data = data_manager.prepare_comparison_data(dataA, dataB, args)
 
-    # Evaluate all paper reviews
+    # Evaluate all paper reviews using multi-threading
     results = []
-    for paper_item in tqdm(comparison_data, desc="Evaluating reviews"): # TODO: use multi-thread to speed up
-        # Get evaluation result
-        result = evaluator.evaluate_reviews(paper_item)
-        results.append(result)
-        # Write result to file
-        ResultWriter.write_result(result, args.output_path)
+
+    with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+        # Submit all tasks
+        future_to_paper = {
+            executor.submit(evaluator.evaluate_reviews, paper_item): paper_item
+            for paper_item in comparison_data
+        }
+
+        # Process completed tasks with progress bar
+        for future in tqdm(as_completed(future_to_paper), total=len(comparison_data), desc="Evaluating reviews"):
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                paper_item = future_to_paper[future]
+                print(f"Error evaluating paper {paper_item.get('id', 'unknown')}: {e}")
+
+    # Write all results to file once
+    if results: # TODO: follow paper order 
+        with open(args.output_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"\nAll results saved to {args.output_path}")
 
     # Print and get results
     results_dict = print_result(results)
@@ -497,14 +521,5 @@ if __name__ == "__main__":
     main()
 
 """
-# Usage examples:
-
-# Using vLLM local server
-python evaluate/rm_evaluate.py --api_url http://localhost:8000/v1 --model_name Qwen/Qwen2.5-7B-Instruct
-
-# Using OpenAI API (API key from .env file)
-python evaluate/rm_evaluate.py --model_name gpt-4o-mini
-
-# Or specify API key directly
-python evaluate/rm_evaluate.py --model_name gpt-4o-mini --api_key your-api-key-here
+python evaluate/rm_evaluate.py --model_name gpt-4o-mini --max_workers 16 --sample_path evaluate/review/deepreviewer_DeepReviewer-7B_2025-10-28_15-17-24.json
 """

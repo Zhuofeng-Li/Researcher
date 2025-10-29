@@ -5,12 +5,13 @@ Benchmark script for DeepReviewer using WestlakeNLP/DeepReview-13K dataset
 import json
 import os
 import random
+import argparse
 from datasets import load_dataset
 from ai_researcher import DeepReviewer
 import time
 from datetime import datetime
 # Set CUDA device if needed
-# os.environ["CUDA_VISIBLE_DEVICES"] = "6,7"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
 # Configuration
 RANDOM_SEED = 42
@@ -20,7 +21,21 @@ NUM_SAMPLES = 100
 random.seed(RANDOM_SEED)
 
 
-def main():
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description="Benchmark DeepReviewer using WestlakeNLP/DeepReview-13K dataset"
+    )
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        default="WestlakeNLP/DeepReviewer-7B",
+        help="Model name to use (default: WestlakeNLP/DeepReviewer-7B)"
+    )
+    return parser.parse_args()
+
+
+def main(args):
 
     # 1. Load WestlakeNLP/DeepReview-13K dataset (test split only)
     print("Loading DeepReview-13K dataset (test split)...")
@@ -71,8 +86,8 @@ def main():
     print(f"Sampled {len(paper_texts)} papers (seed: {RANDOM_SEED})")
 
     # 4. Initialize DeepReviewer and run evaluations
-    print("\nInitializing DeepReviewer...")
-    deep_reviewer = DeepReviewer(model_size="7B", tensor_parallel_size=2)
+    print(f"\nInitializing DeepReviewer with model: {args.model_name}...")
+    deep_reviewer = DeepReviewer(model_name=args.model_name, tensor_parallel_size=2)
 
     # Start timing
     start_time = time.time()
@@ -116,7 +131,11 @@ def main():
 
     # 6. Save to JSON file
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    output_file = f'evaluate/review/benchmark_deepreviewer_results_{timestamp}.json'
+    # Extract model name for filename (e.g., "WestlakeNLP/DeepReviewer-7B" -> "DeepReviewer-7B")
+    model_filename = args.model_name.split('/')[-1]
+    output_dir = 'evaluate/review'
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = f'{output_dir}/deepreviewer_{model_filename}_{timestamp}.json'
     print(f"\nSaving results to {output_file}...")
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
@@ -127,4 +146,12 @@ def main():
 
 
 if __name__ == "__main__":
-    dataset, papers, fast_results, output_data = main()
+    args = parse_args()
+    dataset, papers, fast_results, output_data = main(args)
+
+"""
+python benchmark_deepreviewer.py --model-name WestlakeNLP/DeepReviewer-7B
+python benchmark_deepreviewer.py --model-name Qwen/Qwen3-4B
+python benchmark_deepreviewer.py --model-name Qwen/Qwen3-8B
+python benchmark_deepreviewer.py --model-name Qwen/Qwen2.5-7B-Instruct
+"""

@@ -9,8 +9,7 @@ class CycleReviewer:
     """
 
     def __init__(self,
-                 model_size="8B",
-                 custom_model_name=None,
+                 model_name="WestlakeNLP/CycleReviewer-ML-Llama-3.1-8B",
                  device="cuda",
                  tensor_parallel_size=1,
                  gpu_memory_utilization=0.95):
@@ -18,25 +17,11 @@ class CycleReviewer:
         Initialize the CycleReviewer.
 
         Args:
-            model_size (str): Size of the default model to use. Options: "8B", "70B", "123B"
-            custom_model_name (str, optional): Custom model name to override default mapping
+            model_name (str): Model name to use. Default is "WestlakeNLP/CycleReviewer-ML-Llama-3.1-8B"
             device (str): Device to run the model on. Default is "cuda"
             tensor_parallel_size (int): Number of GPUs to use for tensor parallelism
             gpu_memory_utilization (float): Fraction of GPU memory to use
         """
-        model_mapping = {
-            "8B": "WestlakeNLP/CycleReviewer-ML-Llama-3.1-8B",
-            "70B": "WestlakeNLP/CycleReviewer-ML-Llama3.1-70B",
-            "123B": "WestlakeNLP/CycleReviewer-ML-Pro-123B"
-        }
-
-        # Determine model name
-        if custom_model_name:
-            model_name = custom_model_name
-        else:
-            if model_size not in model_mapping:
-                raise ValueError(f"Invalid model size. Choose from {list(model_mapping.keys())}")
-            model_name = model_mapping[model_size]
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
