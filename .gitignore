@@ -222,3 +222,6 @@ __marimo__/
 
 *.json
 tmp*
+.gradio/
+evaluate/result/
+evaluate/review/

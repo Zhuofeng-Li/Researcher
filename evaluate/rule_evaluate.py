@@ -169,7 +169,6 @@ def evaluate_deep_reviewer(data_path, mode='standard'):
                 pred_contribution.append(estimated_contribution.item())
 
                 # Calculate MSE and MAE for each metric
-                print(estimated_score, true_rate_proxy_n)
                 rating_mse_list_n.append(torch.pow(estimated_score - true_rate_proxy_n, 2).item())
                 rating_mae_list_n.append(torch.abs(estimated_score - true_rate_proxy_n).item())
                 soundness_mse_list_n.append(torch.pow(estimated_soundness - true_soundness_proxy_n, 2).item())
@@ -359,8 +358,6 @@ def main():
     parser.add_argument('--modes', nargs='+', default=['fast'],
                         choices=['fast', 'standard', 'best'],
                         help='Evaluation modes to run (default: all modes)')
-    parser.add_argument('--name', type=str, default=None,
-                        help='Name for the output CSV file (default: auto-generated from data file)')
 
     args = parser.parse_args()
 
@@ -383,17 +380,9 @@ def main():
         all_results.append(results)
 
     # Save results to CSV with selected metrics only
-    # Generate filename with current timestamp
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-
-    # Use --name if provided, otherwise extract from data file path
-    if args.name:
-        base_name = args.name
-    else:
-        # Extract filename without extension from data_path
-        base_name = os.path.splitext(os.path.basename(args.data_path))[0]
-
-    csv_filename = os.path.join(output_dir, f'rule_{base_name}_{timestamp}.csv')
+    # Use data_path filename and change extension to .csv
+    base_name = os.path.splitext(os.path.basename(args.data_path))[0]
+    csv_filename = os.path.join(output_dir, f'rule_{base_name}.csv')
 
     # Define which metrics to include in CSV
     selected_metrics = [
@@ -423,7 +412,5 @@ if __name__ == "__main__":
     main()
 
 """
-python evaluate/rule_evaluate.py evaluate/review/deepreviewer_Qwen3-4B_2025-10-28_14-33-49.json --name DeepReviewer-Qwen3-4B --modes fast
+python evaluate/rule_evaluate.py evaluate/review/deepreviewer_DeepReviewer-7B_2025-11-13_16-34-20.json --modes fast
 """
-
-# 

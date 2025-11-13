@@ -1,7 +1,3 @@
-"""
-Benchmark script for DeepReviewer using WestlakeNLP/DeepReview-13K dataset
-"""
-
 import json
 import os
 import random
@@ -15,7 +11,6 @@ from datetime import datetime
 
 # Configuration
 RANDOM_SEED = 42
-NUM_SAMPLES = 100
 
 # Set random seed for reproducibility
 random.seed(RANDOM_SEED)
@@ -32,6 +27,12 @@ def parse_args():
         default="WestlakeNLP/DeepReviewer-7B",
         help="Model name to use (default: WestlakeNLP/DeepReviewer-7B)"
     )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=100,
+        help="Number of samples to evaluate. Use -1 to evaluate all data (default: 100)"
+    )
     return parser.parse_args()
 
 
@@ -39,7 +40,7 @@ def main(args):
 
     # 1. Load WestlakeNLP/DeepReview-13K dataset (test split only)
     print("Loading DeepReview-13K dataset (test split)...")
-    ds = load_dataset("WestlakeNLP/DeepReview-13K", split="test")
+    ds = load_dataset("ZhuofengLi/deepreview-fast-benchmark", split="train")
 
     # 2. Extract paper context from data and set as an extra column named as paper_text
     print("Extracting paper text from dataset...")
@@ -75,19 +76,22 @@ def main(args):
     paper_texts = list(ds['paper_text'])
 
     # Randomly sample papers with seed for reproducibility
-    if len(paper_texts) > NUM_SAMPLES:
+    if args.num_samples == -1:
+        print(f"Using all {len(paper_texts)} papers")
+    elif args.num_samples > 0 and len(paper_texts) > args.num_samples:
         # Get random indices
-        sampled_indices = random.sample(range(len(paper_texts)), NUM_SAMPLES)
+        sampled_indices = random.sample(range(len(paper_texts)), args.num_samples)
         sampled_indices.sort()  # Sort to maintain some order
         paper_texts = [paper_texts[i] for i in sampled_indices]
         # Also need to filter the dataset to match
         ds = ds.select(sampled_indices)
-
-    print(f"Sampled {len(paper_texts)} papers (seed: {RANDOM_SEED})")
+        print(f"Sampled {len(paper_texts)} papers (seed: {RANDOM_SEED})")
+    else:
+        print(f"Using all {len(paper_texts)} papers (num_samples={args.num_samples} >= dataset size)")
 
     # 4. Initialize DeepReviewer and run evaluations
     print(f"\nInitializing DeepReviewer with model: {args.model_name}...")
-    deep_reviewer = DeepReviewer(model_name=args.model_name, tensor_parallel_size=2)
+    deep_reviewer = DeepReviewer(model_name=args.model_name, tensor_parallel_size=2) # TODO: update 
 
     # Start timing
     start_time = time.time()
@@ -150,8 +154,8 @@ if __name__ == "__main__":
     dataset, papers, fast_results, output_data = main(args)
 
 """
-python benchmark_deepreviewer.py --model-name WestlakeNLP/DeepReviewer-7B
-python benchmark_deepreviewer.py --model-name Qwen/Qwen3-4B
-python benchmark_deepreviewer.py --model-name Qwen/Qwen3-8B
-python benchmark_deepreviewer.py --model-name Qwen/Qwen2.5-7B-Instruct
+python evaluate/benchmark_deepreviewer.py --model-name WestlakeNLP/DeepReviewer-7B --num-samples -1
+python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen3-4B --num-samples -1
+python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen3-8B --num-samples -1
+python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen2.5-7B-Instruct --num-samples -1
 """

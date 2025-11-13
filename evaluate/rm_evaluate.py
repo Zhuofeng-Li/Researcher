@@ -10,6 +10,7 @@ from tqdm import tqdm
 import argparse
 from datetime import datetime
 from dotenv import load_dotenv
+from datasets import load_dataset
 
 # Load environment variables from .env file
 load_dotenv()
@@ -177,7 +178,7 @@ class DataManager:
             return json.load(f)
 
     @staticmethod
-    def prepare_comparison_data(dataA, dataB, args):
+    def prepare_comparison_data(dataA, dataB):
         """
         Prepare data for comparison between standard and fast mode reviews.
 
@@ -188,27 +189,35 @@ class DataManager:
         best_reviews = {}
         paper_contexts = {}
         for item in dataA:
-            pred = ReviewProcessor.extract_review_content(item['pred_best_mode'])
+            pred = ReviewProcessor.extract_review_content(item['pred_fast_mode']['raw_text'])
             best_reviews[item['id']] = pred
             paper_contexts[item['id']] = item['paper_context']
 
-        # Extract fast mode reviews
+        # Extract fast mode reviews from HuggingFace dataset format
+        # dataB is expected to have 'id' and 'outputs' fields
         standard_reviews = {}
         for item in dataB:
-            standard_reviews[item['id']] = ReviewProcessor.extract_review_content(item[f'pred_fast_mode'])
+            # Extract review from 'outputs' field
+            # outputs is a JSON string, parse it and get the 'content' field
+            outputs_list = json.loads(item['outputs'])
+            review_content = outputs_list[0]['content']
+            standard_reviews[item['id']] = ReviewProcessor.extract_review_content(review_content)
 
-        # Create comparison dataset
+        # Create comparison dataset - only use common IDs to ensure alignment
         comparison_data = []
         common_ids = set(best_reviews.keys()) & set(standard_reviews.keys())
+
+        print(f"Data A has {len(best_reviews)} reviews")
+        print(f"Data B has {len(standard_reviews)} reviews")
+        print(f"Common IDs: {len(common_ids)}")
 
         for paper_id in common_ids:
             comparison_data.append({
                 'id': paper_id,
-                'year': args.year,
                 'paper_context': paper_contexts[paper_id],
-                'DeepReviewer': best_reviews[paper_id],
-                'other': standard_reviews[paper_id],
-                'other_type': f'DeepReviewer_Standard'
+                'reviewer_agent': best_reviews[paper_id],
+                'deepreviewer_fast_baseline': standard_reviews[paper_id],
+                'other_type': f'DeepReviewer_Fast_Benchmark'
             })
 
         return comparison_data
@@ -250,20 +259,20 @@ class EvaluationManager:
             content = (
                     '# Paper:\n' + paper_item['paper_context'] +
                     '\n\n---***---\n---***---\n---***---\n' +
-                    '#Assistant A:\n' + paper_item['DeepReviewer'] +
+                    '#Assistant A:\n' + paper_item['reviewer_agent'] +
                     '\n\n---***---\n---***---\n---***---\n' +
-                    '#Assistant B:\n' + paper_item['other']
+                    '#Assistant B:\n' + paper_item['deepreviewer_fast_baseline']
             )
-            ordering = 'A'  # DeepReviewer is Assistant A
+            ordering = 'A'  # reviewer_agent is Assistant A
         else:
             content = (
                     '# Paper:\n' + paper_item['paper_context'] +
                     '\n\n---***---\n---***---\n---***---\n' +
-                    '#Assistant A:\n' + paper_item['other'] +
+                    '#Assistant A:\n' + paper_item['deepreviewer_fast_baseline'] +
                     '\n\n---***---\n---***---\n---***---\n' +
-                    '#Assistant B:\n' + paper_item['DeepReviewer']
+                    '#Assistant B:\n' + paper_item['reviewer_agent']
             )
-            ordering = 'B'  # DeepReviewer is Assistant B
+            ordering = 'B'  # reviewer_agent is Assistant B
 
         return content, ordering
 
@@ -448,12 +457,7 @@ def parse_args():
     parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="Model name")
 
     # Paths
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    parser.add_argument("--output_path", type=str, default=f"evaluate/result/rm_results_{timestamp}.json", help="Output file path")
-    parser.add_argument("--sample_path", type=str, default="evaluate/review/sample.json", help="Sample file path")
-
-    # Year
-    parser.add_argument("--year", type=int, default=2024, help="Paper year")
+    parser.add_argument("data_path", type=str, default="evaluate/review/sample.json", help="Data file path for data A")
 
     # Multi-threading
     parser.add_argument("--max_workers", type=int, default=5, help="Maximum number of worker threads (default: 5)")
@@ -463,16 +467,33 @@ def parse_args():
 def main():
     """Main execution function."""
     args = parse_args()
+
+    # Set output paths based on data_path filename
+    base_name = os.path.splitext(os.path.basename(args.data_path))[0]
+    output_path = os.path.join('evaluate/result', f'{base_name}.json')
+
     # Initialize components
     data_manager = DataManager()
     evaluator = EvaluationManager(args)
 
-    # Load data
-    dataA = data_manager.load_data(args.sample_path)
-    dataB = data_manager.load_data(args.sample_path)
+    # Load data A from local JSON file
+    dataA = data_manager.load_data(args.data_path)
+
+    # Load data B from HuggingFace dataset
+    print("Loading data B from HuggingFace dataset: ZhuofengLi/deepreview-fast-benchmark")
+    dataset = load_dataset("ZhuofengLi/deepreview-fast-benchmark", split="train")
+
+    # Convert HuggingFace dataset to list format
+    dataB = []
+    for item in dataset:
+        dataB.append({
+            'id': item['id'],
+            'outputs': item['outputs']
+        })
+    print(f"Loaded {len(dataB)} items from HuggingFace dataset")
 
     # Prepare comparison data
-    comparison_data = data_manager.prepare_comparison_data(dataA, dataB, args)
+    comparison_data = data_manager.prepare_comparison_data(dataA, dataB)
 
     # Evaluate all paper reviews using multi-threading
     results = []
@@ -494,10 +515,10 @@ def main():
                 print(f"Error evaluating paper {paper_item.get('id', 'unknown')}: {e}")
 
     # Write all results to file once
-    if results: # TODO: follow paper order 
-        with open(args.output_path, 'w', encoding='utf-8') as f:
+    if results:
+        with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
-        print(f"\nAll results saved to {args.output_path}")
+        print(f"\nAll results saved to {output_path}")
 
     # Print and get results
     results_dict = print_result(results)
@@ -506,8 +527,9 @@ def main():
     output_dir = 'evaluate/result'
     os.makedirs(output_dir, exist_ok=True)
 
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    csv_filename = os.path.join(output_dir, f'rm_results_{timestamp}.csv')
+    # Use data_path filename and change extension to .csv
+    base_name = os.path.splitext(os.path.basename(args.data_path))[0]
+    csv_filename = os.path.join(output_dir, f'{base_name}.csv')
 
     print(f"\nSaving results to {csv_filename}...")
     with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
@@ -521,5 +543,5 @@ if __name__ == "__main__":
     main()
 
 """
-python evaluate/rm_evaluate.py --model_name gpt-4o-mini --max_workers 16 --sample_path evaluate/review/deepreviewer_DeepReviewer-7B_2025-10-28_15-17-24.json
+python evaluate/rm_evaluate.py evaluate/review/deepreviewer_DeepReviewer-7B_2025-11-13_16-34-20.json --model_name gpt-4o-mini --max_workers 16
 """
