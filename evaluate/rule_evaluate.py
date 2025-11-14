@@ -20,12 +20,6 @@ def get_pred(pred_context):
     Returns:
         dict: Structured prediction with all review components
     """
-    try:
-        # Extract the review content from the boxed format
-        pred_context = pred_context.split(r'\boxed_review{')[-1].split('\n}')[0]
-    except:
-        pred_context = pred_context['raw_text'].split(r'\boxed_review{')[-1].split('\n}')[0]
-
     # Initialize a dictionary with all review components
     pred = {
         'Summary': '',
@@ -41,12 +35,32 @@ def get_pred(pred_context):
         'Decision': ''
     }
 
-    # Parse each section from the prediction context
-    for context in pred_context.split('## '):
-        for key in pred:
-            if key + ':\n\n' in context:
-                pred[key] = context.split(key + ':\n\n')[-1].strip()
+    # If pred_context is a dict (from DeepReviewer.evaluate())
+    if isinstance(pred_context, dict):
+        # Extract from meta_review if available
+        meta_review = pred_context.get('meta_review', {})
 
+        # Map the keys (lowercase in meta_review to capitalized in pred)
+        key_mapping = {
+            'summary': 'Summary',
+            'rating': 'Rating',
+            'soundness': 'Soundness',
+            'presentation': 'Presentation',
+            'contribution': 'Contribution',
+            'strengths': 'Strengths',
+            'weaknesses': 'Weaknesses',
+            'suggestions': 'Suggestions',
+            'questions': 'Questions',
+            'confidence': 'Confidence',
+            'decision': 'Decision'
+        }
+
+        for meta_key, pred_key in key_mapping.items():
+            if meta_key in meta_review:
+                pred[pred_key] = str(meta_review[meta_key])
+
+
+    print(pred)
     return pred
 
 
@@ -356,7 +370,7 @@ def main():
     parser = argparse.ArgumentParser(description='Evaluate DeepReviewer predictions')
     parser.add_argument('data_path', type=str, help='Path to the JSON file containing predictions')
     parser.add_argument('--modes', nargs='+', default=['fast'],
-                        choices=['fast', 'standard', 'best'],
+                        choices=['base', 'fast', 'standard', 'best'],
                         help='Evaluation modes to run (default: all modes)')
 
     args = parser.parse_args()

@@ -33,6 +33,13 @@ def parse_args():
         default=100,
         help="Number of samples to evaluate. Use -1 to evaluate all data (default: 100)"
     )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="fast_mode",
+        choices=["base_mode", "fast_mode", "standard_mode", "best_mode"],
+        help="Evaluation mode to use (default: fast_mode)"
+    )
     return parser.parse_args()
 
 
@@ -95,26 +102,25 @@ def main(args):
 
     # Start timing
     start_time = time.time()
-    print("\nRunning Fast Mode evaluation...")
-    fast_review_results = deep_reviewer.evaluate(
+    print(f"\nRunning {args.mode} evaluation...")
+    review_results = deep_reviewer.evaluate(
         paper_texts,
-        mode="Fast Mode",  # Options: "Fast Mode", "Standard Mode", "Best Mode"
+        mode=args.mode,  # Options: "base_mode", "fast_mode", "standard_mode", "best_mode"
         reviewer_num=4         # Simulate 4 different reviewers
     )
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print(f"\nFast Mode evaluation completed in {elapsed_time:.2f} seconds")
+    print(f"\n{args.mode} evaluation completed in {elapsed_time:.2f} seconds")
     
-    # print("\nRunning Standard Mode evaluation...")
+    # print("\nRunning standard_mode evaluation...")
     # standard_review_results = deep_reviewer.evaluate(
     #     paper_texts,
-    #     mode="Standard Mode",  # Options: "Fast Mode", "Standard Mode", "Best Mode"
+    #     mode="standard_mode",  # Options: "fast_mode", "standard_mode", "best_mode"
     #     reviewer_num=4         # Simulate 4 different reviewers
     # )
 
     print("\nBenchmark completed!")
-    print(f"Fast Mode results: {len(fast_review_results)} reviews")
-    # print(f"Standard Mode results: {len(standard_review_results)} reviews")
+    print(f"{args.mode} results: {len(review_results)} reviews")
 
     # 5. Prepare output data with all required fields
     print("\nPreparing output data...")
@@ -128,8 +134,7 @@ def main(args):
             'paper_context': ds[i].get('paper_text', ''),
             'decision': ds[i].get('decision', ''),
             'review': ds[i].get('reviewer_comments', ''),
-            'pred_fast_mode': fast_review_results[i],
-            'pred_standard_mode': '',  # standard_review_results[i],
+            f'pred_{args.mode}': review_results[i],
         }
         output_data.append(entry)
 
@@ -146,12 +151,12 @@ def main(args):
 
     print(f"Results saved successfully! Total entries: {len(output_data)}")
 
-    return ds, paper_texts, fast_review_results, output_data
+    return ds, paper_texts, review_results, output_data
 
 
 if __name__ == "__main__":
     args = parse_args()
-    dataset, papers, fast_results, output_data = main(args)
+    dataset, papers, review_results, output_data = main(args)
 
 """
 python evaluate/benchmark_deepreviewer.py --model-name WestlakeNLP/DeepReviewer-7B --num-samples -1
@@ -161,3 +166,6 @@ python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen2.5-7B-Instruct 
 
 python evaluate/benchmark_deepreviewer.py --model-name ZhuofengLi/Qwen3-4B-Instruct-2507-DeepReview-lora-sft --num-samples -1
 """
+
+# 1. update prompt 
+# 2. use qwen3-4b-non-thinking model 

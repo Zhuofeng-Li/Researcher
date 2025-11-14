@@ -6,6 +6,8 @@ from copy import deepcopy
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
+from .prompt import BASE_MODE_SYSTEM_PROMPT
+
 # Helper Functions for Best Mode
 # Adapted from the provided Flask app (main.py)
 
@@ -143,12 +145,12 @@ class DeepReviewer:
             "gpu_memory_utilization": gpu_memory_utilization
         }
 
-    def _generate_system_prompt(self, mode="Standard Mode", reviewer_num=4):
+    def _generate_system_prompt(self, mode="standard_mode", reviewer_num=4):
         """
         Generate the system prompt based on the review mode and number of reviewers.
 
         Args:
-            mode (str): Review mode. Options: "Fast Mode", "Standard Mode", "Best Mode"
+            mode (str): Review mode. Options: "base_mode", "fast_mode", "standard_mode", "best_mode"
             reviewer_num (int): Number of reviewers to simulate
 
         Returns:
@@ -156,24 +158,26 @@ class DeepReviewer:
         """
         simreviewer_prompt = "When you simulate different reviewers, write the sections in this order: Summary, Soundness, Presentation, Contribution, Strengths, Weaknesses, Suggestions, Questions, Rating and Confidence."
 
-        if mode == "Best Mode":
+        if mode == "best_mode":
             prompt = f"""You are an expert academic reviewer tasked with providing a thorough and balanced evaluation of research papers. Your thinking mode is Best Mode. In this mode, you should aim to provide the most reliable review results by conducting a thorough analysis of the paper. I allow you to use search tools to obtain background knowledge about the paper - please provide three different questions. I will help you with the search. After you complete your thinking, you should review by simulating {reviewer_num} different reviewers, and use self-verification to double-check any paper deficiencies identified. Finally, provide complete review results."""
             return prompt + simreviewer_prompt
-        elif mode == "Standard Mode":
+        elif mode == "standard_mode":
             prompt = f"""You are an expert academic reviewer tasked with providing a thorough and balanced evaluation of research papers. Your thinking mode is Standard Mode. In this mode, you should review by simulating {reviewer_num} different reviewers, and use self-verification to double-check any paper deficiencies identified. Finally, provide complete review results."""
             return prompt + simreviewer_prompt
-        elif mode == "Fast Mode":
+        elif mode == "fast_mode":
             return "You are an expert academic reviewer tasked with providing a thorough and balanced evaluation of research papers. Your thinking mode is Fast Mode. In this mode, you should quickly provide the review results."
+        elif mode == "base_mode":
+            return BASE_MODE_SYSTEM_PROMPT
         else:
             return "You are an expert academic reviewer tasked with providing a thorough and balanced evaluation of research papers."
 
-    def evaluate(self, paper_context, mode="Standard Mode", reviewer_num=4, max_tokens=35000):
+    def evaluate(self, paper_context, mode="standard_mode", reviewer_num=4, max_tokens=35000):
         """
         Generate a peer review for the given academic paper.
 
         Args:
             paper_context (str): The paper content to review. Can be a single string or a list of strings for batch processing.
-            mode (str): Review mode. Options: "Fast Mode", "Standard Mode", "Best Mode"
+            mode (str): Review mode. Options: "base_mode", "fast_mode", "standard_mode", "best_mode"
             reviewer_num (int): Number of reviewers to simulate
             max_tokens (int): Maximum number of tokens to generate for each LLM call.
 
@@ -191,11 +195,11 @@ class DeepReviewer:
 
         generated_reviews_batch = []
         
-        batch_size = 10 
+        batch_size = 10
         for i in range(0, len(paper_contexts), batch_size):
             current_batch_contexts = paper_contexts[i:i + batch_size]
-            
-            if mode != "Best Mode":
+
+            if mode != "best_mode":
                 prompts = []
                 for single_paper_context in current_batch_contexts:
                     messages = [
