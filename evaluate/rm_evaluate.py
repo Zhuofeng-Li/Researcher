@@ -480,8 +480,7 @@ def main():
     dataA = data_manager.load_data(args.data_path)
 
     # Load data B from HuggingFace dataset
-    print("Loading data B from HuggingFace dataset: ZhuofengLi/deepreview-fast-benchmark")
-    dataset = load_dataset("ZhuofengLi/deepreview-fast-benchmark", split="train")
+    dataset = load_dataset("WestlakeNLP/DeepReview-13K", split="test")
 
     # Convert HuggingFace dataset to list format
     dataB = []
@@ -544,4 +543,6 @@ if __name__ == "__main__":
 
 """
 python evaluate/rm_evaluate.py evaluate/review/deepreviewer_DeepReviewer-7B_2025-11-13_16-34-20.json --model_name gpt-4o-mini --max_workers 16
+
+python evaluate/rm_evaluate.py evaluate/review/deepreviewer_Qwen3-4B-Instruct-2507-DeepReview-lora-sft_2025-11-14_17-12-41.json --model_name gpt-4o-mini --max_workers 32
 """

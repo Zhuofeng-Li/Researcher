@@ -40,7 +40,7 @@ def main(args):
 
     # 1. Load WestlakeNLP/DeepReview-13K dataset (test split only)
     print("Loading DeepReview-13K dataset (test split)...")
-    ds = load_dataset("ZhuofengLi/deepreview-fast-benchmark", split="train")
+    ds = load_dataset("WestlakeNLP/DeepReview-13K", split="test")
 
     # 2. Extract paper context from data and set as an extra column named as paper_text
     print("Extracting paper text from dataset...")
@@ -139,7 +139,7 @@ def main(args):
     model_filename = args.model_name.split('/')[-1]
     output_dir = 'evaluate/review'
     os.makedirs(output_dir, exist_ok=True)
-    output_file = f'{output_dir}/deepreviewer_{model_filename}_{timestamp}.json'
+    output_file = f'{output_dir}/deepreviewer_{model_filename}_sample_{args.num_samples}_{timestamp}.json'
     print(f"\nSaving results to {output_file}...")
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
@@ -158,4 +158,6 @@ python evaluate/benchmark_deepreviewer.py --model-name WestlakeNLP/DeepReviewer-
 python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen3-4B --num-samples -1
 python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen3-8B --num-samples -1
 python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen2.5-7B-Instruct --num-samples -1
+
+python evaluate/benchmark_deepreviewer.py --model-name ZhuofengLi/Qwen3-4B-Instruct-2507-DeepReview-lora-sft --num-samples -1
 """

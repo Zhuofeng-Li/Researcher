@@ -412,5 +412,6 @@ if __name__ == "__main__":
     main()
 
 """
-python evaluate/rule_evaluate.py evaluate/review/deepreviewer_DeepReviewer-7B_2025-11-13_16-34-20.json --modes fast
+python evaluate/rule_evaluate.py evaluate/review/deepreviewer_Qwen3-4B_2025-10-28_14-33-49.json --modes fast
+python evaluate/rule_evaluate.py evaluate/review/deepreviewer_Qwen3-4B-Instruct-2507-DeepReview-lora-sft_2025-11-14_17-12-41.json --modes fast
 """
