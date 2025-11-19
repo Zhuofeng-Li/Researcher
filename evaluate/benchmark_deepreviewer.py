@@ -98,7 +98,7 @@ def main(args):
 
     # 4. Initialize DeepReviewer and run evaluations
     print(f"\nInitializing DeepReviewer with model: {args.model_name}...")
-    deep_reviewer = DeepReviewer(model_name=args.model_name, tensor_parallel_size=2) # TODO: update 
+    deep_reviewer = DeepReviewer(model_name=args.model_name, tensor_parallel_size=2) 
 
     # Start timing
     start_time = time.time()
@@ -166,6 +166,3 @@ python evaluate/benchmark_deepreviewer.py --model-name Qwen/Qwen2.5-7B-Instruct 
 
 python evaluate/benchmark_deepreviewer.py --model-name ZhuofengLi/Qwen3-4B-Instruct-2507-DeepReview-lora-sft --num-samples -1
 """
-
-# 1. update prompt 
-# 2. use qwen3-4b-non-thinking model 
